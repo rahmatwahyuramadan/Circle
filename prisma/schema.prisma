@@ -1,0 +1,72 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id String @id @default(uuid())
+  username String
+  fullname String
+  email String @unique
+  password String
+  profile_picture String
+  bio String
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  follower UserFollowing[] @relation(name: "follower")
+  following UserFollowing[] @relation(name: "following")
+  Likes Like[]
+  threads Thread[]
+  replies Reply[]
+}
+
+model UserFollowing {
+  id String @id @default(uuid())
+  follower User @relation(name: "follower", fields: [followerId], references: [id], onDelete: Cascade)
+  followerId String
+  following User @relation(name: "following", fields: [followingId], references: [id], onDelete: Cascade)
+  followingId String
+  followedAt DateTime @default(now())
+  isFollow Boolean? @default(false)
+}
+
+model Thread {
+  id String @id @default(uuid())
+  content String
+  image String?
+  created_at DateTime @default(now())
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  user_id String
+  Like Like[]
+  replies Reply[]
+  isLiked Boolean @default(false)
+}
+
+model Reply {
+  id String @id @default(uuid())
+  content String
+  image String?
+  created_at DateTime @default(now())
+  thread Thread @relation(fields: [thread_id], references: [id], onDelete: Cascade)
+  thread_id String
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  user_id String
+}
+
+model Like{
+  id String @id @default(uuid())
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  user_id String
+  thread Thread @relation(fields: [thread_id], references: [id], onDelete: Cascade)
+  thread_id String
+}
