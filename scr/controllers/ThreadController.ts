@@ -17,4 +17,7 @@ export default new class ThreadController{
     deleteThread(req: Request, res: Response) {
         ThreadService.deleteThread(req, res)
     }
+    findAllRedis(req: Request, res: Response) {
+        ThreadService.findAllRedis(req, res)
+    }
 }

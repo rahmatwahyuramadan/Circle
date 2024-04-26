@@ -3,6 +3,7 @@ import { Request, Response } from "express";
 import cloudinary from '../config'
 import * as fs from "fs"
 import { addthread } from "../utils/ThreadUtils"
+import redisClient, { DEFAULT_EXPIRATION } from "../cache/redis"
 
 const prisma = new PrismaClient()
 
@@ -12,12 +13,131 @@ function isValidUUID(uuid: string): boolean {
     return UUIDRegex.test(uuid)
 }
 
+let isRedisConnected = false
+async function redisConnectedDone() {
+    if (!isRedisConnected) {
+        try {
+            await redisClient.connect()
+            isRedisConnected = true
+        } catch (error) {
+            console.log("Error connecting to redis", error);
+
+        }
+    }
+}
+
 export default new class ThreadService{
     private readonly UserRepository = prisma.user
     private readonly ThreadRepository = prisma.thread
     private readonly LikeRepository = prisma.like
     private readonly ReplyRepository = prisma.reply
     private readonly UserFollowingRepository = prisma.userFollowing
+
+    async findAllRedis(req: Request, res: Response): Promise<Response> {
+        try {
+            redisConnectedDone()
+            const page = parseInt(req.params.page) || 1
+            const pageSize = 10
+            const skip = (page - 1) * pageSize
+
+            const cacheKey = `threads_page_${page}`
+            if (!cacheKey) return res.status(404).json({ message: "KEY not Found" })
+
+            const cacheData = await redisClient.get(cacheKey)
+
+            if (cacheData) {
+                const threads = JSON.parse(cacheData)
+
+                const findthreads = await this.ThreadRepository.findMany({
+                    skip,
+                    take: pageSize,
+                    include: {
+                        user: true,
+                        Like: true,
+                        replies: true
+                    },
+                    orderBy: {
+                        created_at: 'desc'
+                    }
+                })
+
+                const totalThread = await this.ThreadRepository.count()
+                const totalPages = Math.ceil(totalThread / pageSize)
+
+                // Mengecek apakah data yang ada di database ada data baru atau tidak
+                if (
+                    threads.data.length === findthreads.length &&
+                    threads.pagination.totalThread == totalThread &&
+                    threads.pagination.totalPages == totalPages &&
+                    findthreads.every((findthreads, index) =>
+                        findthreads.content === threads.data[index].content &&
+                        findthreads.image === threads.data[index].image
+                    )
+                ) {
+                    // jika gak ada perubahan maka tampilkan data yang ada di redis
+                    return res.status(200).json({
+                        code: 200,
+                        status: "Success",
+                        message: "Find All CACHE Threads Success",
+                        data: threads
+                    })
+                } else {
+                    // jika ada perubahan, maka data yang ada di redis akan dihapus dan ngambil data baru
+                    await redisClient.del(cacheKey)
+                }
+            }
+
+            // Ngambil data ulang dari database
+            const threads1 = await this.ThreadRepository.findMany({
+                skip,
+                take: pageSize,
+                include: {
+                    user: true,
+                    Like: true,
+                    replies: true
+                },
+                orderBy: {
+                    created_at: 'desc'
+                }
+            })
+
+            const totalThread = await this.ThreadRepository.count()
+            const totalPages = Math.ceil(totalThread / pageSize)
+
+            if (page > totalPages) return res.status(404).json({ message: "Page not found" })
+
+            const threads2 = {
+                data: threads1,
+                pagination: {
+                    totalThread,
+                    totalPages,
+                    currentPage: page,
+                    pageSize
+                }
+            }
+
+            redisClient.setEx(
+                cacheKey,
+                DEFAULT_EXPIRATION,
+                JSON.stringify({
+                    message: "Find All Cache Thread Success",
+                    data: threads2.data,
+                    pagination: threads2.pagination
+                })
+            )
+
+            return res.status(200).json({
+                code: 200,
+                status: "Success",
+                message: "Find All Threads Success",
+                data: threads2
+            })
+
+        } catch (error) {
+            console.log(error);
+            return res.status(500).json({ message: error })
+        }
+    }
 
     async findAll(req: Request, res: Response): Promise<Response>{
         try{

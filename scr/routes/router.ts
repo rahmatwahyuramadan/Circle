@@ -43,6 +43,9 @@ router.post("/addthread/:threadId", AuthMiddelware.Auth, upload.single('image'),
 router.post("/updatethread/:threadId", AuthMiddelware.Auth, upload.single('image'), ThreadController.updateThread)
 router.delete('/deletethread/:threadId', AuthMiddelware.Auth, ThreadController.deleteThread)
 
+// Thread Redis
+router.get('/threadredis/:page', AuthMiddelware.Auth, ThreadController.findAllRedis)
+
 router.use('/uploads', express.static(path.join(__dirname, 'uploads')))
 
 export default router
