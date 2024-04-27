@@ -4,6 +4,7 @@ import * as bcyrpt from "bcrypt"
 import * as jwt from "jsonwebtoken"
 import { v4 as uuidv4 } from "uuid"
 import { register, login } from "../utils/AuthUtils"
+import { delimiter } from "path";
 
 const prisma = new PrismaClient()
 
@@ -105,9 +106,9 @@ export default new class AuthService{
         }
     }
 
-    async logout(req: Request, res: Response) {
+    async logout(req: Request, res: Response): Promise<Response> {
         try {
-            localStorage.clear()
+            delete res.locals.loginSession
 
             return res.status(200).json({
                 code: 200,
